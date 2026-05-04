@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>DropBeam — P2P File Transfer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #05080f;
+      --surface: #0d1220;
+      --border: #1e2a40;
+      --accent: #00e5ff;
+      --accent2: #ff3cac;
+      --text: #e8edf5;
+      --muted: #5a6a85;
+      --success: #00ffaa;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Animated grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Radial glow */
+    body::after {
+      content: '';
+      position: fixed;
+      top: -20%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 800px;
+      height: 500px;
+      background: radial-gradient(ellipse, rgba(0,229,255,0.07) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+    }
+
+    /* Header */
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 1.25rem 0;
+    }
+    .logo {
+      font-family: 'Space Mono', monospace;
+      font-size: 1.1rem;
+      color: var(--accent);
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .logo-dot {
+      width: 8px; height: 8px;
+      background: var(--accent2);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.4); }
+    }
+
+    /* Hero */
+    .hero {
+      text-align: center;
+      padding: 4rem 0 2.5rem;
+    }
+    .hero h1 {
+      font-size: clamp(2.4rem, 6vw, 4.2rem);
+      font-weight: 800;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      margin-bottom: 1rem;
+    }
+    .hero h1 span {
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero p {
+      color: var(--muted);
+      font-size: 1.05rem;
+      font-weight: 400;
+      max-width: 480px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: rgba(0,229,255,0.07);
+      border: 1px solid rgba(0,229,255,0.2);
+      color: var(--accent);
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      padding: 0.3rem 0.75rem;
+      border-radius: 999px;
+      margin-bottom: 1.5rem;
+      letter-spacing: 0.08em;
+    }
+
+    /* Cards grid */
+    .cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin: 2rem 0;
+    }
+    @media (max-width: 640px) {
+      .cards { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2rem;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .card:hover { border-color: rgba(0,229,255,0.3); transform: translateY(-2px); }
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent), transparent);
+    }
+    .card.receive::before {
+      background: linear-gradient(90deg, var(--accent2), transparent);
+    }
+
+    .card-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .card-label::before {
+      content: '';
+      display: block;
+      width: 20px; height: 1px;
+      background: var(--muted);
+    }
+
+    .card h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin-bottom: 0.4rem;
+    }
+    .card p {
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.6;
+      margin-bottom: 1.5rem;
+    }
+
+    /* Drop zone */
+    .dropzone {
+      border: 1.5px dashed var(--border);
+      border-radius: 10px;
+      padding: 2rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+    .dropzone:hover, .dropzone.drag-over {
+      border-color: var(--accent);
+      background: rgba(0,229,255,0.04);
+    }
+    .dropzone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+    .dropzone-icon {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+      line-height: 1;
+    }
+    .dropzone-text {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .dropzone-text strong {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      font-family: 'Syne', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+      width: 100%;
+      margin-top: 0.75rem;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #000;
+    }
+    .btn-primary:hover { filter: brightness(1.15); }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-secondary {
+      background: var(--accent2);
+      color: #fff;
+    }
+    .btn-secondary:hover { filter: brightness(1.15); }
+    .btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Code display */
+    .session-code-wrap {
+      display: none;
+      margin-top: 1.25rem;
+    }
+    .session-code-wrap.visible { display: block; }
+    .session-code-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+    .session-code {
+      font-family: 'Space Mono', monospace;
+      font-size: 2.2rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      color: var(--accent);
+      background: rgba(0,229,255,0.06);
+      border: 1px solid rgba(0,229,255,0.2);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.15s;
+      user-select: all;
+    }
+    .session-code:hover {
+      background: rgba(0,229,255,0.12);
+    }
+    .copy-hint {
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-align: center;
+      margin-top: 0.35rem;
+    }
+
+    /* Code input */
+    .code-input {
+      font-family: 'Space Mono', monospace;
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      color: var(--text);
+      background: rgba(255,255,255,0.04);
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      text-align: center;
+      width: 100%;
+      transition: border-color 0.2s;
+      outline: none;
+    }
+    .code-input:focus { border-color: var(--accent2); }
+    .code-input::placeholder { color: var(--muted); font-size: 1.2rem; }
+
+    /* Progress */
+    .progress-wrap {
+      display: none;
+      margin-top: 1.25rem;
+    }
+    .progress-wrap.visible { display: block; }
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+    .progress-name {
+      font-size: 0.8rem;
+      color: var(--text);
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 70%;
+    }
+    .progress-pct {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--accent);
+    }
+    .progress-bar-bg {
+      background: var(--border);
+      border-radius: 4px;
+      height: 6px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      border-radius: 4px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+    .progress-status {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 0.4rem;
+    }
+    .progress-status.success { color: var(--success); }
+    .progress-status.error { color: #ff5577; }
+
+    /* Log */
+    .log-section {
+      margin: 2rem 0 3rem;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .log-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
+    }
+    .log-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .log-dot.green { background: #00ffaa; }
+    .log-dot.yellow { background: #ffd700; }
+    .log-dot.red { background: #ff5577; }
+    .log-title {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      margin-left: 0.25rem;
+    }
+    .log-body {
+      padding: 1rem 1.25rem;
+      max-height: 180px;
+      overflow-y: auto;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.72rem;
+      line-height: 1.8;
+    }
+    .log-entry { color: var(--muted); }
+    .log-entry.info { color: var(--accent); }
+    .log-entry.success { color: var(--success); }
+    .log-entry.error { color: #ff5577; }
+    .log-entry.warn { color: #ffd700; }
+    .log-entry .ts { color: #2e3f5c; margin-right: 0.5rem; }
+
+    /* Connection status ring */
+    .status-ring {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.72rem;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+    }
+    .ring {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+    .ring.connected { background: var(--success); box-shadow: 0 0 6px var(--success); animation: pulse 2s infinite; }
+    .ring.connecting { background: #ffd700; box-shadow: 0 0 6px #ffd700; animation: pulse 1s infinite; }
+    .ring.error { background: #ff5577; }
+
+    /* Received files list */
+    .received-list { margin-top: 1rem; }
+    .received-file {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.6rem 0.75rem;
+      background: rgba(0,255,170,0.05);
+      border: 1px solid rgba(0,255,170,0.15);
+      border-radius: 8px;
+      margin-bottom: 0.5rem;
+      gap: 0.75rem;
+    }
+    .received-file-name {
+      font-size: 0.82rem;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .received-file-size {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.68rem;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+    .btn-dl {
+      padding: 0.3rem 0.7rem;
+      background: var(--success);
+      color: #000;
+      border-radius: 5px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: filter 0.15s;
+    }
+    .btn-dl:hover { filter: brightness(1.15); }
+
+    /* How it works */
+    .how {
+      display: flex;
+      gap: 2rem;
+      justify-content: center;
+      margin: 3rem 0;
+      flex-wrap: wrap;
+    }
+    .how-step {
+      text-align: center;
+      max-width: 160px;
+    }
+    .how-num {
+      font-family: 'Space Mono', monospace;
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: var(--border);
+      line-height: 1;
+      margin-bottom: 0.5rem;
+    }
+    .how-step p {
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 1.25rem 0;
+      text-align: center;
+      font-size: 0.72rem;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+    }
+    footer span { color: var(--accent); }
+
+    /* Shake animation for wrong code */
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      20%,60% { transform: translateX(-6px); }
+      40%,80% { transform: translateX(6px); }
+    }
+    .shake { animation: shake 0.35s ease; }
+
+    /* File selected state */
+    .file-selected {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.65rem 0.75rem;
+      background: rgba(0,229,255,0.06);
+      border: 1px solid rgba(0,229,255,0.2);
+      border-radius: 8px;
+      margin-top: 0.75rem;
+    }
+    .file-selected-name {
+      font-size: 0.82rem;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .file-selected-size {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.68rem;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="container" style="display:flex;align-items:center;justify-content:space-between;">
+      <div class="logo">
+        <div class="logo-dot"></div>
+        DROPBEAM
+      </div>
+      <div class="status-ring" id="connStatus">
+        <div class="ring" id="connRing"></div>
+        <span id="connLabel">disconnected</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <div class="hero">
+      <div class="badge">⚡ WebRTC P2P · No file servers · E2E</div>
+      <h1>Transfer files<br><span>beam-fast</span></h1>
+      <p>Direct device-to-device transfer using a 6-digit session code. Your files never touch our servers.</p>
+    </div>
+
+    <div class="cards">
+
+      <!-- SEND CARD -->
+      <div class="card">
+        <div class="card-label">01 — Send</div>
+        <h2>Send a File</h2>
+        <p>Drop any file. Get a code. Share it with the receiver.</p>
+
+        <div class="dropzone" id="dropzone">
+          <input type="file" id="fileInput" />
+          <div class="dropzone-icon">📦</div>
+          <div class="dropzone-text"><strong>Click to browse</strong> or drag &amp; drop</div>
+        </div>
+
+        <div class="file-selected hidden" id="fileSelected">
+          <span style="font-size:1.2rem">📄</span>
+          <span class="file-selected-name" id="fileSelectedName"></span>
+          <span class="file-selected-size" id="fileSelectedSize"></span>
+        </div>
+
+        <button class="btn btn-primary" id="btnGenCode" disabled>Generate Session Code</button>
+
+        <div class="session-code-wrap" id="codeWrap">
+          <div class="session-code-label">Share this code with receiver</div>
+          <div class="session-code" id="sessionCode" title="Click to copy">------</div>
+          <div class="copy-hint">tap to copy · valid for this session only</div>
+        </div>
+
+        <div class="progress-wrap" id="sendProgress">
+          <div class="progress-header">
+            <span class="progress-name" id="sendFileName"></span>
+            <span class="progress-pct" id="sendPct">0%</span>
+          </div>
+          <div class="progress-bar-bg"><div class="progress-bar" id="sendBar"></div></div>
+          <div class="progress-status" id="sendStatus">Waiting for receiver…</div>
+        </div>
+      </div>
+
+      <!-- RECEIVE CARD -->
+      <div class="card receive">
+        <div class="card-label">02 — Receive</div>
+        <h2>Receive a File</h2>
+        <p>Enter the 6-digit code from the sender to establish a secure P2P connection.</p>
+
+        <input
+          type="text"
+          class="code-input"
+          id="codeInput"
+          placeholder="000-000"
+          maxlength="7"
+          autocomplete="off"
+          spellcheck="false"
+        />
+
+        <button class="btn btn-secondary" id="btnConnect">Connect &amp; Receive</button>
+
+        <div class="progress-wrap" id="recvProgress">
+          <div class="progress-header">
+            <span class="progress-name" id="recvFileName">Incoming file…</span>
+            <span class="progress-pct" id="recvPct">0%</span>
+          </div>
+          <div class="progress-bar-bg"><div class="progress-bar" id="recvBar"></div></div>
+          <div class="progress-status" id="recvStatus">Connecting…</div>
+        </div>
+
+        <div class="received-list" id="receivedList"></div>
+      </div>
+
+    </div>
+
+    <!-- LOG -->
+    <div class="log-section">
+      <div class="log-header">
+        <div class="log-dot green"></div>
+        <div class="log-dot yellow"></div>
+        <div class="log-dot red"></div>
+        <span class="log-title">SYSTEM LOG</span>
+      </div>
+      <div class="log-body" id="logBody">
+        <div class="log-entry"><span class="ts">--:--:--</span>DropBeam ready. Waiting for action.</div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer>
+    <div class="container">
+      built with <span>WebRTC</span> + <span>Socket.io</span> · files never touch the server · <span>open source</span>
+    </div>
+  </footer>
+
+  <!-- Socket.io client — must match your server's address -->
+  <script src="http://localhost:3000/socket.io/socket.io.js"></script>
+  <script>
+  (() => {
+    // ─── CONFIG ────────────────────────────────────────────────────────
+    const CHUNK_SIZE = 64 * 1024; // 64KB chunks
+    const ICE_SERVERS = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun.cloudflare.com:3478' },
+    ];
+
+    // ─── STATE ─────────────────────────────────────────────────────────
+    let socket, pc, dataChannel;
+    let selectedFile = null;
+    let sessionCode = null;
+    let isSender = false;
+
+    // Receive state
+    let recvMeta = null;
+    let recvBuffer = [];
+    let recvReceived = 0;
+
+    // ─── ELEMENTS ──────────────────────────────────────────────────────
+    const $ = id => document.getElementById(id);
+    const dropzone     = $('dropzone');
+    const fileInput    = $('fileInput');
+    const fileSelected = $('fileSelected');
+    const fileSelName  = $('fileSelectedName');
+    const fileSelSize  = $('fileSelectedSize');
+    const btnGenCode   = $('btnGenCode');
+    const codeWrap     = $('codeWrap');
+    const sessionCodeEl= $('sessionCode');
+    const codeInput    = $('codeInput');
+    const btnConnect   = $('btnConnect');
+    const sendProgress = $('sendProgress');
+    const sendFileName = $('sendFileName');
+    const sendPct      = $('sendPct');
+    const sendBar      = $('sendBar');
+    const sendStatus   = $('sendStatus');
+    const recvProgress = $('recvProgress');
+    const recvFileName = $('recvFileName');
+    const recvPct      = $('recvPct');
+    const recvBar      = $('recvBar');
+    const recvStatus   = $('recvStatus');
+    const receivedList = $('receivedList');
+    const logBody      = $('logBody');
+    const connRing     = $('connRing');
+    const connLabel    = $('connLabel');
+
+    // ─── LOGGING ───────────────────────────────────────────────────────
+    function log(msg, type = 'default') {
+      const ts = new Date().toLocaleTimeString('en-US', { hour12: false });
+      const div = document.createElement('div');
+      div.className = `log-entry${type !== 'default' ? ' ' + type : ''}`;
+      div.innerHTML = `<span class="ts">${ts}</span>${msg}`;
+      logBody.appendChild(div);
+      logBody.scrollTop = logBody.scrollHeight;
+    }
+
+    // ─── CONNECTION STATUS ─────────────────────────────────────────────
+    function setConnStatus(state) {
+      connRing.className = 'ring ' + state;
+      const labels = { connected: 'connected', connecting: 'connecting…', error: 'error', '': 'disconnected' };
+      connLabel.textContent = labels[state] || 'disconnected';
+    }
+
+    // ─── FORMAT SIZE ───────────────────────────────────────────────────
+    function fmtSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+    }
+
+    // ─── SOCKET.IO ─────────────────────────────────────────────────────
+    function initSocket() {
+      socket = io('http://localhost:3000');
+
+      socket.on('connect', () => {
+        log('Signaling server connected', 'info');
+        setConnStatus('connected');
+      });
+      socket.on('disconnect', () => {
+        log('Disconnected from signaling server', 'warn');
+        setConnStatus('');
+      });
+      socket.on('connect_error', () => {
+        log('Cannot reach signaling server — is server.js running?', 'error');
+        setConnStatus('error');
+      });
+
+      // Sender: peer joined our room
+      socket.on('peer-joined', async () => {
+        log('Receiver joined the session — establishing P2P…', 'info');
+        await createSenderConnection();
+      });
+
+      // WebRTC signaling relay
+      socket.on('signal', async ({ type, data }) => {
+        if (!pc) return;
+        if (type === 'offer') {
+          await pc.setRemoteDescription(new RTCSessionDescription(data));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          socket.emit('signal', { room: sessionCode, type: 'answer', data: answer });
+          log('Sent answer to sender', 'info');
+        } else if (type === 'answer') {
+          await pc.setRemoteDescription(new RTCSessionDescription(data));
+          log('Received answer — ICE negotiation starting', 'info');
+        } else if (type === 'ice') {
+          try { await pc.addIceCandidate(new RTCIceCandidate(data)); } catch {}
+        }
+      });
+
+      socket.on('error', ({ message }) => {
+        log('Server error: ' + message, 'error');
+      });
+    }
+
+    // ─── FILE INPUT ────────────────────────────────────────────────────
+    fileInput.addEventListener('change', e => {
+      const f = e.target.files[0];
+      if (!f) return;
+      selectedFile = f;
+      fileSelName.textContent = f.name;
+      fileSelSize.textContent = fmtSize(f.size);
+      fileSelected.classList.remove('hidden');
+      btnGenCode.disabled = false;
+      log(`File selected: ${f.name} (${fmtSize(f.size)})`, 'info');
+    });
+
+    dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+    dropzone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropzone.classList.remove('drag-over');
+      const f = e.dataTransfer.files[0];
+      if (!f) return;
+      selectedFile = f;
+      fileSelName.textContent = f.name;
+      fileSelSize.textContent = fmtSize(f.size);
+      fileSelected.classList.remove('hidden');
+      btnGenCode.disabled = false;
+      log(`File dropped: ${f.name} (${fmtSize(f.size)})`, 'info');
+    });
+
+    // ─── GENERATE CODE ─────────────────────────────────────────────────
+    btnGenCode.addEventListener('click', () => {
+      if (!selectedFile) return;
+      isSender = true;
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      sessionCode = code.slice(0,3) + '-' + code.slice(3);
+      sessionCodeEl.textContent = sessionCode;
+      codeWrap.classList.add('visible');
+      btnGenCode.disabled = true;
+      log(`Session code generated: ${sessionCode}`, 'success');
+      socket.emit('create-room', { room: sessionCode });
+      log('Waiting for receiver to join…');
+    });
+
+    sessionCodeEl.addEventListener('click', () => {
+      navigator.clipboard.writeText(sessionCode).then(() => {
+        sessionCodeEl.textContent = '✓ Copied!';
+        setTimeout(() => sessionCodeEl.textContent = sessionCode, 1200);
+      });
+    });
+
+    // ─── CODE INPUT FORMAT ─────────────────────────────────────────────
+    codeInput.addEventListener('input', e => {
+      let v = e.target.value.replace(/\D/g, '').slice(0, 6);
+      if (v.length > 3) v = v.slice(0,3) + '-' + v.slice(3);
+      codeInput.value = v;
+    });
+
+    // ─── CONNECT (RECEIVER) ────────────────────────────────────────────
+    btnConnect.addEventListener('click', async () => {
+      const code = codeInput.value.trim();
+      if (!/^\d{3}-\d{3}$/.test(code)) {
+        codeInput.classList.add('shake');
+        setTimeout(() => codeInput.classList.remove('shake'), 400);
+        log('Invalid code format — must be XXX-XXX', 'error');
+        return;
+      }
+      isSender = false;
+      sessionCode = code;
+      btnConnect.disabled = true;
+      log(`Joining session ${code}…`, 'info');
+      socket.emit('join-room', { room: code });
+      await createReceiverConnection();
+      recvProgress.classList.add('visible');
+      recvStatus.textContent = 'Waiting for sender…';
+    });
+
+    // ─── SENDER WebRTC ─────────────────────────────────────────────────
+    async function createSenderConnection() {
+      pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+
+      dataChannel = pc.createDataChannel('file-transfer', {
+        ordered: true,
+        maxRetransmits: 30,
+      });
+
+      dataChannel.bufferedAmountLowThreshold = 256 * 1024;
+
+      dataChannel.onopen = () => {
+        log('Data channel open — starting transfer', 'success');
+        sendProgress.classList.add('visible');
+        sendFileName.textContent = selectedFile.name;
+        sendStatus.textContent = 'Transferring…';
+        sendFileInChunks();
+      };
+
+      dataChannel.onerror = e => log('Data channel error: ' + e.error, 'error');
+      dataChannel.onclose = () => log('Data channel closed');
+
+      pc.onicecandidate = e => {
+        if (e.candidate) {
+          socket.emit('signal', { room: sessionCode, type: 'ice', data: e.candidate });
+        }
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        log('ICE state: ' + pc.iceConnectionState, pc.iceConnectionState === 'connected' ? 'success' : 'default');
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit('signal', { room: sessionCode, type: 'offer', data: offer });
+      log('Offer sent to receiver', 'info');
+    }
+
+    // ─── RECEIVER WebRTC ───────────────────────────────────────────────
+    async function createReceiverConnection() {
+      pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+
+      pc.onicecandidate = e => {
+        if (e.candidate) {
+          socket.emit('signal', { room: sessionCode, type: 'ice', data: e.candidate });
+        }
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        log('ICE state: ' + pc.iceConnectionState, pc.iceConnectionState === 'connected' ? 'success' : 'default');
+      };
+
+      pc.ondatachannel = e => {
+        const ch = e.channel;
+        ch.binaryType = 'arraybuffer';
+        let metaReceived = false;
+
+        ch.onmessage = event => {
+          if (!metaReceived) {
+            // First message is JSON metadata
+            recvMeta = JSON.parse(event.data);
+            recvBuffer = [];
+            recvReceived = 0;
+            metaReceived = true;
+            recvFileName.textContent = recvMeta.name;
+            recvStatus.textContent = 'Receiving ' + fmtSize(recvMeta.size) + '…';
+            log(`Receiving: ${recvMeta.name} (${fmtSize(recvMeta.size)})`, 'info');
+          } else {
+            // Binary chunks
+            recvBuffer.push(event.data);
+            recvReceived += event.data.byteLength;
+            const pct = Math.round((recvReceived / recvMeta.size) * 100);
+            recvBar.style.width = pct + '%';
+            recvPct.textContent = pct + '%';
+
+            if (recvReceived >= recvMeta.size) {
+              // Reassemble
+              const blob = new Blob(recvBuffer, { type: recvMeta.type || 'application/octet-stream' });
+              recvStatus.textContent = '✓ Transfer complete!';
+              recvStatus.className = 'progress-status success';
+              log(`✓ Received: ${recvMeta.name}`, 'success');
+              addReceivedFile(recvMeta.name, blob, recvMeta.size);
+              recvBuffer = [];
+              metaReceived = false;
+            }
+          }
+        };
+
+        ch.onerror = e => log('Channel error: ' + e, 'error');
+      };
+    }
+
+    // ─── CHUNKED SEND ──────────────────────────────────────────────────
+    async function sendFileInChunks() {
+      const file = selectedFile;
+      const meta = { name: file.name, size: file.size, type: file.type };
+      dataChannel.send(JSON.stringify(meta));
+
+      const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+      let offset = 0;
+      let chunkIdx = 0;
+
+      sendFileName.textContent = file.name;
+
+      function sendNext() {
+        if (offset >= file.size) {
+          sendStatus.textContent = '✓ File sent!';
+          sendStatus.className = 'progress-status success';
+          log(`✓ Sent: ${file.name}`, 'success');
+          return;
+        }
+
+        // Backpressure: wait if buffer is full
+        if (dataChannel.bufferedAmount > 4 * 1024 * 1024) {
+          dataChannel.addEventListener('bufferedamountlow', sendNext, { once: true });
+          return;
+        }
+
+        const slice = file.slice(offset, offset + CHUNK_SIZE);
+        slice.arrayBuffer().then(buf => {
+          dataChannel.send(buf);
+          offset += buf.byteLength;
+          chunkIdx++;
+          const pct = Math.round((offset / file.size) * 100);
+          sendBar.style.width = pct + '%';
+          sendPct.textContent = pct + '%';
+          sendStatus.textContent = `Chunk ${chunkIdx}/${totalChunks} — ${fmtSize(offset)} / ${fmtSize(file.size)}`;
+          setTimeout(sendNext, 0);
+        });
+      }
+
+      sendNext();
+    }
+
+    // ─── RECEIVED FILE ITEM ────────────────────────────────────────────
+    function addReceivedFile(name, blob, size) {
+      const url = URL.createObjectURL(blob);
+      const div = document.createElement('div');
+      div.className = 'received-file';
+      div.innerHTML = `
+        <span style="font-size:1.1rem">✅</span>
+        <span class="received-file-name">${name}</span>
+        <span class="received-file-size">${fmtSize(size)}</span>
+        <a href="${url}" download="${name}"><button class="btn-dl">Download</button></a>
+      `;
+      receivedList.prepend(div);
+    }
+
+    // ─── INIT ───────────────────────────────────────────────────────────
+    initSocket();
+  })();
+  </script>
+</body>
+</html>
