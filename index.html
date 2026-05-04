@@ -649,7 +649,7 @@
   </footer>
 
   <!-- Socket.io client — must match your server's address -->
-  <script src="http://localhost:3000/socket.io/socket.io.js"></script>
+  <script src="dropbeam-production-df21.up.railway.app/socket.io/socket.io.js"></script>
   <script>
   (() => {
     // ─── CONFIG ────────────────────────────────────────────────────────
@@ -725,7 +725,7 @@
 
     // ─── SOCKET.IO ─────────────────────────────────────────────────────
     function initSocket() {
-      socket = io('http://localhost:3000');
+      socket = io('dropbeam-production-df21.up.railway.app');
 
       socket.on('connect', () => {
         log('Signaling server connected', 'info');
